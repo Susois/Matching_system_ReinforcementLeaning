@@ -108,8 +108,12 @@ def build_advisor_skills(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     # Keep only successfully extracted rows with a valid advisor
     df = df[df["extraction_status"] == "success"].copy()
-    df["advisor_name"] = df["advisor_name"].str.strip()
-    df = df[df["advisor_name"].notna() & (df["advisor_name"] != "")]
+    if df.empty:
+        logger.warning("No successful extractions found — skipping skill build.")
+        return pd.DataFrame(), pd.DataFrame()
+    # Cast to string safely before strip (avoids crash when column is all-None)
+    df["advisor_name"] = df["advisor_name"].astype(str).str.strip()
+    df = df[df["advisor_name"].notna() & (~df["advisor_name"].isin(["", "None", "nan"]))]
 
     if df.empty:
         logger.warning("No successful extractions with advisor names found.")
@@ -244,9 +248,10 @@ def merge_survey_ratings(
         .round(2)
     )
 
-    # Merge into profile_df, overwrite rating columns
-    for col in rating_cols.values():
-        profile_df.pop(col, None)   # drop old placeholder
+    # Merge into profile_df, overwrite rating columns (drop placeholders first)
+    cols_to_drop = [c for c in rating_cols.values() if c in profile_df.columns]
+    if cols_to_drop:
+        profile_df = profile_df.drop(columns=cols_to_drop)
 
     merged = profile_df.merge(survey_agg, on="advisor_name", how="left")
     logger.info(f"Merged survey ratings for {len(survey_agg)} advisor(s).")

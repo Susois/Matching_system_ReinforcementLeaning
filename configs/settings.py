@@ -15,8 +15,8 @@ OUTPUT_DIR = ROOT_DIR / "outputs"
 LOG_DIR    = ROOT_DIR / "logs"
 
 # Input
-PDF_INPUT_DIR = DATA_DIR                        # raw PDFs sit directly in data/
-DOCX_INPUT_DIR = DATA_DIR
+PDF_INPUT_DIR  = DATA_DIR / "1.pdfs"   # raw PDFs
+DOCX_INPUT_DIR = DATA_DIR / "2.docx"   # raw DOCX
 
 # Output
 PROCESSED_DIR        = DATA_DIR / "processed"

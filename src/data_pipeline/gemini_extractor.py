@@ -140,6 +140,10 @@ class GeminiExtractor:
         """
         Send text to Gemini and return a dict with extracted fields.
         On failure returns a dict with extraction_status='failed'.
+
+        Handles:
+          - 429 RESOURCE_EXHAUSTED: waits the retry-after duration then retries
+          - Other errors: exponential backoff up to MAX_RETRIES
         """
         if not text or not text.strip():
             logger.warning(f"Empty text for {source_file}; skipping Gemini call.")
@@ -174,6 +178,23 @@ class GeminiExtractor:
                 return record
 
             except Exception as e:
+                err_str = str(e)
+
+                # ── 429: parse retry-after from error message ─────────
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    # Try to parse "Please retry in Xs" from the message
+                    wait = GEMINI_RETRY_DELAY * 10  # default 20 s
+                    match = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", err_str, re.IGNORECASE)
+                    if match:
+                        wait = float(match.group(1)) + 2  # add 2 s buffer
+                    logger.warning(
+                        f"Rate limited (429) for {source_file}. "
+                        f"Waiting {wait:.0f}s before retry [{attempt}/{GEMINI_MAX_RETRIES}]..."
+                    )
+                    time.sleep(wait)
+                    continue  # don't count against attempt limit for 429
+
+                # ── Other errors: exponential backoff ─────────────────
                 logger.warning(f"Attempt {attempt} failed for {source_file}: {e}")
                 if attempt < GEMINI_MAX_RETRIES:
                     time.sleep(GEMINI_RETRY_DELAY * attempt)

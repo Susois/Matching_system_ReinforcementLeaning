@@ -9,13 +9,15 @@ pypdf==4.3.1
 python-docx==1.1.2
 
 # OCR fallback (optional — install only if PDFs are scanned)
-# pdf2image==1.17.0
-# pytesseract==0.3.13
-# Pillow==10.4.0
+pdf2image==1.17.0
+pytesseract==0.3.13
+Pillow==10.4.0
 # Also requires: Tesseract binary + vie.traineddata language pack
 
 # ── Gemini API ────────────────────────────────────────────────
-google-generativeai==0.7.2
+# google-genai 2.x có bug với pydantic 2.7.x — dùng 1.16.0
+# gemini-2.0-flash đã bị retire (Aug 2026), dùng gemini-2.5-flash
+google-genai==1.16.0
 
 # ── Web crawling ──────────────────────────────────────────────
 requests==2.32.3

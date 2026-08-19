@@ -15,7 +15,7 @@ Output files (in data/processed/):
 import argparse
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -31,9 +31,9 @@ from configs.settings import (
     PROCESSED_DIR,
     THESIS_CSV,
     THESIS_CSV_COLUMNS,
-    BATCH_SIZE,
     MAX_PDF_PAGES,
     LOG_DIR,
+    GEMINI_RETRY_DELAY,
 )
 from src.data_pipeline.pdf_ocr import extract_text, get_source_files
 from src.data_pipeline.gemini_extractor import GeminiExtractor
@@ -76,7 +76,16 @@ def _save(records: list[dict], csv_path: Path, append: bool = True) -> None:
     new_df = pd.DataFrame(records, columns=THESIS_CSV_COLUMNS)
     if append and csv_path.exists():
         existing = pd.read_csv(csv_path)
-        combined = pd.concat([existing, new_df], ignore_index=True)
+        # Cast both to same dtypes to suppress FutureWarning on concat
+        for col in THESIS_CSV_COLUMNS:
+            if col not in existing.columns:
+                existing[col] = None
+            if col not in new_df.columns:
+                new_df[col] = None
+        combined = pd.concat(
+            [existing[THESIS_CSV_COLUMNS], new_df[THESIS_CSV_COLUMNS]],
+            ignore_index=True
+        )
         combined.to_csv(csv_path, index=False, encoding="utf-8-sig")
     else:
         new_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
@@ -120,7 +129,7 @@ def run_pipeline(limit: int = 0, force: bool = False) -> pd.DataFrame:
         logger.info("Nothing new to process.")
         return pd.DataFrame(columns=THESIS_CSV_COLUMNS)
 
-    logger.info(f"Processing {len(todo)} files with {BATCH_SIZE} workers...")
+    logger.info(f"Processing {len(todo)} files sequentially (1 request at a time to respect rate limits)...")
 
     # Initialise extractor (validates API key early)
     try:
@@ -129,21 +138,21 @@ def run_pipeline(limit: int = 0, force: bool = False) -> pd.DataFrame:
         logger.error(str(e))
         sys.exit(1)
 
-    # Parallel processing
+    # Sequential processing — avoids 429 rate limits on free tier
     records: list[dict] = []
-    with ThreadPoolExecutor(max_workers=BATCH_SIZE) as pool:
-        futures = {pool.submit(_process_one, f, extractor): f for f in todo}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Extracting"):
-            file_path = futures[future]
-            try:
-                record = future.result()
-            except Exception as e:
-                logger.error(f"Unexpected error for {file_path.name}: {e}")
-                record = GeminiExtractor._failed_record(file_path.name, str(e))
-            records.append(record)
+    for file_path in tqdm(todo, desc="Extracting"):
+        try:
+            record = _process_one(file_path, extractor)
+        except Exception as e:
+            logger.error(f"Unexpected error for {file_path.name}: {e}")
+            record = GeminiExtractor._failed_record(file_path.name, str(e))
+        records.append(record)
 
-    # Save
-    _save(records, THESIS_CSV, append=(not force))
+        # Save after every file so progress is not lost on crash/interrupt
+        _save([record], THESIS_CSV, append=True)
+
+        # Polite delay between requests (free tier: 10 req/min)
+        time.sleep(GEMINI_RETRY_DELAY)
 
     ok  = sum(1 for r in records if r.get("extraction_status") == "success")
     fail = len(records) - ok

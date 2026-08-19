@@ -5,7 +5,7 @@ One-shot entry point that runs the full data pipeline in sequence:
 
   Step 1: clean_data.py        — PDF OCR + Gemini extraction → thesis_extracted.csv
   Step 2: build_advisor_skills — aggregate skills → advisor_skills.csv + advisor_profiles.csv
-  Step 3: merge_to_survey      — merge with khaosat_kltn.csv → merged_dataset.csv
+  Step 3: build_pdf_dataset    — map PDF data → merged_dataset schema → pdf_dataset.csv
   Step 4: crawl_advisor_data   — (optional) enrich profiles via web crawl
 
 Usage:
@@ -70,12 +70,11 @@ def main():
     logger.info("")
 
     logger.info("=" * 60)
-    logger.info("STEP 3 — Merge with survey data")
+    logger.info("STEP 3 — Build PDF dataset (schema = merged_dataset)")
     logger.info("=" * 60)
-    from src.data_pipeline.merge_to_survey import run as run_merge
-    run_merge()
+    from src.data_pipeline.build_pdf_dataset import run as run_pdf_dataset
+    run_pdf_dataset()
     logger.info("")
-
     if not args.no_crawl:
         logger.info("=" * 60)
         logger.info("STEP 4 — Crawl advisor public data")

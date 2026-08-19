@@ -153,12 +153,16 @@ def extract_text(file_path: Path, max_pages: Optional[int] = None) -> str:
 
 def get_source_files(directory: Path, extensions: tuple = (".pdf", ".docx")) -> list[Path]:
     """
-    Return sorted list of PDF/DOCX files directly inside `directory`
-    (non-recursive — subdirs like raw/, processed/ are ignored).
+    Return sorted list of PDF/DOCX files from directory and its subdirectories.
+    Scans both data/1.pdfs/ and data/2.docx/ if directory = data/.
+    Skips zip, rar and other non-text formats.
     """
-    files = [
-        f for f in sorted(directory.iterdir())
-        if f.is_file() and f.suffix.lower() in extensions
-    ]
-    logger.info(f"Found {len(files)} source files in {directory}")
+    files = []
+    for f in sorted(directory.rglob("*")):
+        if f.is_file() and f.suffix.lower() in extensions:
+            # Skip files inside processed/ or embeddings/ subdirs
+            if any(part in ("processed", "embeddings", "raw") for part in f.parts):
+                continue
+            files.append(f)
+    logger.info(f"Found {len(files)} source files under {directory}")
     return files
