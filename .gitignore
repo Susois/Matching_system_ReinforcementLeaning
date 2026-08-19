@@ -1,0 +1,52 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Data (raw PDFs may be large; keep processed CSVs)
+data/*.pdf
+data/*.docx
+data/embeddings/
+
+# Logs
+logs/
+*.log
+
+# Model checkpoints
+outputs/models/
+*.pt
+*.pth
+*.pkl
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+*.docx
+clean_data/
+data/
+outputs/
+tests/
+backend/
+frontend/

@@ -1,0 +1,11 @@
+{
+  "_readme": "Thêm thông tin thủ công cho giảng viên tại đây. Key = tên giảng viên chính xác như trong advisor_profiles.csv",
+  "_example": {
+    "TS Phạm Xuân Lâm": {
+      "research_interests": "Artificial Intelligence, Computer Vision, NLP",
+      "homepage": "https://neu.edu.vn/...",
+      "google_scholar_url": "https://scholar.google.com/citations?user=...",
+      "note": "Trưởng khoa CNTT"
+    }
+  }
+}
