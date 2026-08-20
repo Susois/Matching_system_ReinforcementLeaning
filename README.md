@@ -1,17 +1,21 @@
 # Hệ thống RL Phân bổ Sinh viên – Giảng viên Hướng dẫn
 
-> **Reinforcement Learning-Based Student–Advisor Matching System**  
-> Sử dụng dữ liệu khóa luận lịch sử, NLP/Embedding, PPO, DQN và Continuous Learning.
+> **Reinforcement Learning-Based Student–Advisor Matching System**
+> Khoa CNTT – Đại học Kinh tế Quốc dân | Deadline: 20/11/2026
 
 ---
 
 ## Giới thiệu
 
-Đây là source code cho khóa luận tốt nghiệp nghiên cứu bài toán **phân bổ tối ưu sinh viên – giảng viên hướng dẫn** bằng Reinforcement Learning.
+Đề tài xây dựng hệ thống hỗ trợ phân bổ tối ưu sinh viên – giảng viên hướng dẫn khóa luận tốt nghiệp bằng **Reinforcement Learning**, kết hợp:
 
-Thay vì gán thủ công hoặc dùng greedy matching, hệ thống mô hình hóa bài toán thành **Sequential Decision Making**: RL agent chọn assignment cho từng sinh viên trong cohort, môi trường trả reward dựa trên độ phù hợp chủ đề, nguyện vọng, quota và fairness. Dữ liệu khóa luận lịch sử được dùng để xây dựng **Matching Simulator** — nơi agent được train an toàn trước khi đưa ra hỗ trợ phân công thật.
+- **NLP / Embedding** để biểu diễn nội dung khóa luận và hồ sơ nghiên cứu giảng viên
+- **Matching Simulator** xây từ dữ liệu khóa luận lịch sử để train RL offline
+- **PPO** (mô hình chính) và **DQN** (đối chứng) tối ưu assignment toàn cohort
+- **Continuous Learning** — candidate model V2 được tạo và đánh giá sau mỗi cohort mới
+- **Web Application** cho Student / Advisor / Admin
 
-**Công nghệ cốt lõi:** Python · PyTorch · Stable-Baselines3 (PPO / DQN) · Gymnasium · sentence-transformers · FastAPI · React + TypeScript · PostgreSQL · Docker
+**Điểm phân biệt với Greedy/Gale-Shapley:** RL học policy có thể cải thiện theo thời gian khi thu thập thêm feedback, không chỉ tối ưu một lần.
 
 ---
 
@@ -19,46 +23,64 @@ Thay vì gán thủ công hoặc dùng greedy matching, hệ thống mô hình h
 
 ```
 student-advisor-rl/
+│
 ├── data/
-│   ├── *.pdf / *.docx            ← file khóa luận gốc (input)
-│   ├── processed/                ← CSV đầu ra của pipeline
-│   └── embeddings/               ← vector embedding GV / SV
+│   ├── 1.pdfs/                    ← ~200 file khóa luận PDF/DOCX (input)
+│   ├── processed/                 ← CSV/JSON đầu ra của pipeline
+│   │   ├── thesis_extracted.csv   ← thông tin trích từ PDF (Gemini/LLM)
+│   │   ├── pdf_dataset.csv        ← dataset chuẩn hóa (schema khảo sát)
+│   │   ├── advisor_skills.csv     ← skill tổng hợp từ PDF
+│   │   ├── advisor_profiles.csv   ← hồ sơ GV đầy đủ + rating
+│   │   ├── advisor_research_profiles.json  ← research profile từ crawler
+│   │   └── advisor_skills_extracted.csv    ← skill + evidence + strength
+│   ├── raw/
+│   │   ├── lecturers_list.json    ← danh sách 29 GV (slug, URL)
+│   │   ├── lecturers_raw.json     ← raw HTML data của tất cả GV
+│   │   └── profiles/              ← raw profile từng GV (<slug>.json)
+│   └── embeddings/                ← vector embeddings (Phase 2)
 │
 ├── src/
-│   ├── data_pipeline/            ← Giai đoạn 1: thu thập & làm sạch dữ liệu
-│   │   ├── pdf_ocr.py            ← trích text từ PDF (pypdf → OCR fallback)
-│   │   ├── gemini_extractor.py   ← gọi Gemini API, trả về JSON có cấu trúc
-│   │   ├── clean_data.py         ← pipeline chính: PDF → thesis_extracted.csv
-│   │   ├── build_advisor_skills.py  ← tổng hợp skill profile của giảng viên
-│   │   ├── crawl_advisor_data.py ← crawl Semantic Scholar, enrich hồ sơ GV
-│   │   ├── merge_to_survey.py    ← gộp với khaosat_kltn.csv
-│   │   └── run_pipeline.py       ← chạy toàn bộ pipeline một lệnh
+│   ├── data_pipeline/             ← Phase 1: thu thập & làm sạch dữ liệu PDF
+│   │   ├── pdf_ocr.py             ← pypdf + OCR fallback
+│   │   ├── llm_extractor.py       ← LLM extraction (9router / Gemini) với model rotation
+│   │   ├── clean_data.py          ← pipeline chính: PDF → thesis_extracted.csv
+│   │   ├── build_pdf_dataset.py   ← chuẩn hóa schema → pdf_dataset.csv
+│   │   ├── build_advisor_skills.py ← tổng hợp skill GV từ PDF data
+│   │   ├── crawl_advisor_data.py  ← enrich từ Semantic Scholar (tùy chọn)
+│   │   └── run_pipeline.py        ← entry point: chạy toàn bộ pipeline
 │   │
-│   ├── nlp/                      ← Giai đoạn 2: embedding & similarity
-│   ├── environment/              ← Giai đoạn 3: Gymnasium matching env
+│   ├── crawler/                   ← Phase 1b: crawl website fit.neu.edu.vn
+│   │   ├── lecturer_list_crawler.py  ← Step 1: lấy danh sách GV
+│   │   ├── lecturer_detail_crawler.py ← Step 2: crawl từng profile (raw)
+│   │   ├── skill_extractor.py     ← Step 3: taxonomy match + evidence + strength
+│   │   └── pipeline.py            ← entry point crawler
+│   │
+│   ├── nlp/                       ← Phase 2: embedding & similarity (TODO)
+│   ├── environment/               ← Phase 3: Gymnasium matching env (TODO)
 │   ├── rl/
-│   │   ├── ppo/                  ← PPO — mô hình RL chính
-│   │   └── dqn/                  ← DQN — mô hình RL đối chứng
-│   ├── baselines/                ← Random, Greedy, Gale-Shapley, SPA
-│   └── simulator/                ← Matching Simulator (train offline)
+│   │   ├── ppo/                   ← PPO — mô hình RL chính (TODO)
+│   │   └── dqn/                   ← DQN — mô hình RL đối chứng (TODO)
+│   ├── baselines/                 ← Random, Greedy, Gale-Shapley, SPA (TODO)
+│   ├── simulator/                 ← Matching Simulator (TODO)
+│   └── model_registry/            ← Model versioning, evaluation gate (TODO)
 │
 ├── configs/
-│   ├── settings.py               ← tất cả path, hằng số, schema CSV
-│   └── advisor_overrides.json    ← thông tin GV bổ sung thủ công
+│   ├── settings.py                ← tất cả path, hằng số, schema CSV
+│   └── advisor_overrides.json     ← thông tin GV bổ sung thủ công
 │
 ├── clean_data/
-│   └── khaosat_kltn.csv          ← dữ liệu khảo sát (xuất từ Google Forms)
+│   └── khaosat_kltn.csv           ← khảo sát Google Forms (input tham khảo)
 │
 ├── outputs/
-│   ├── results/                  ← kết quả thí nghiệm (CSV)
-│   ├── figures/                  ← biểu đồ
-│   └── models/                   ← checkpoint RL
+│   ├── results/                   ← kết quả thí nghiệm
+│   ├── figures/                   ← biểu đồ
+│   └── models/                    ← checkpoint RL
 │
-├── notebooks/                    ← EDA, phân tích NLP, kết quả thí nghiệm
-├── backend/                      ← FastAPI service
-├── frontend/                     ← React + TypeScript
+├── notebooks/                     ← EDA, NLP analysis, experiment results
+├── backend/                       ← FastAPI service (Phase 4)
+├── frontend/                      ← React + TypeScript (Phase 4)
 ├── tests/
-├── .env.example                  ← mẫu biến môi trường
+├── .env.example
 └── requirements.txt
 ```
 
@@ -66,155 +88,144 @@ student-advisor-rl/
 
 ## Cài đặt
 
-### Yêu cầu
-- Python 3.10+
-- Google Gemini API key ([lấy tại đây](https://aistudio.google.com/app/apikey))
-
-### Các bước
-
 ```bash
-# 1. Cài dependencies
+# Cài dependencies
 pip install -r requirements.txt
 
-# 2. Tạo file .env từ mẫu
+# Cài Playwright browsers (dùng cho crawler)
+python -m playwright install chromium
+
+# Tạo .env
 copy .env.example .env
-# Mở .env và điền GOOGLE_API_KEY=<your-key>
+# Điền NINEROUTER_BASE_URL, NINEROUTER_API_KEY, NINEROUTER_MODEL
 ```
 
-### OCR (tùy chọn — chỉ cần nếu PDF bị scan)
+### Cấu hình `.env`
 
-```bash
-pip install pdf2image pytesseract Pillow
-# Cài Tesseract binary: https://github.com/tesseract-ocr/tesseract
-# Tải thêm gói tiếng Việt: vie.traineddata
+```env
+# LLM Provider: "openai_compat" (9router) hoặc "gemini"
+LLM_PROVIDER=openai_compat
+
+# 9router endpoint
+NINEROUTER_BASE_URL=http://localhost:20128/v1
+NINEROUTER_API_KEY=sk-...
+NINEROUTER_MODEL=kr/claude-haiku-4.5
+
+# Model rotation — tự động khi model bị limit
+# NINEROUTER_MODEL_LIST=kr/claude-haiku-4.5,ag/gemini-3-flash,...
 ```
 
 ---
 
-## Giai đoạn 1 — Data Pipeline
+## Phase 1 — Data Pipeline (đang thực hiện)
 
-### Đặt file PDF vào thư mục `data/`
-
-```
-data/
-├── 11221234_NguyenVanA_TenDeTai.pdf
-├── 11221235_TranThiB_TenDeTai.pdf
-└── ...
-```
-
-### Chạy pipeline
+### A. Trích xuất thông tin từ PDF khóa luận
 
 ```bash
-# Chạy toàn bộ (extract → skill profiles → merge → crawl)
-python -m src.data_pipeline.run_pipeline
-
-# Bỏ qua bước crawl web (nhanh hơn, không cần mạng)
+# Chạy toàn bộ (extract → build dataset → skill profiles)
 python -m src.data_pipeline.run_pipeline --no-crawl
 
-# Test với 3 file trước khi chạy hết
-python -m src.data_pipeline.run_pipeline --limit 3 --no-crawl
+# Test với 5 file trước
+python -m src.data_pipeline.run_pipeline --no-crawl --limit 5
 
-# Re-process toàn bộ kể cả file đã xử lý
-python -m src.data_pipeline.run_pipeline --force --no-crawl
+# Re-process tất cả (kể cả đã xong)
+python -m src.data_pipeline.run_pipeline --no-crawl --force
+
+# Từng bước riêng
+python -m src.data_pipeline.clean_data          # PDF → thesis_extracted.csv
+python -m src.data_pipeline.build_pdf_dataset   # → pdf_dataset.csv
+python -m src.data_pipeline.build_advisor_skills # → advisor_skills.csv
 ```
 
-### Chạy từng bước riêng lẻ
+**LLM model rotation:** Khi một model bị rate-limit hoặc từ chối, pipeline tự động chuyển sang model tiếp theo trong `NINEROUTER_MODEL_LIST`. Progress được lưu sau mỗi file — ngắt bất cứ lúc nào không mất dữ liệu.
+
+### B. Crawl hồ sơ giảng viên từ fit.neu.edu.vn
 
 ```bash
-# Bước 1: trích xuất thông tin từ PDF → thesis_extracted.csv
-python -m src.data_pipeline.clean_data
+# Chạy full pipeline crawler (3 bước)
+python -m src.crawler.pipeline
 
-# Bước 2: tổng hợp skill của giảng viên
-python -m src.data_pipeline.build_advisor_skills
+# Từng bước riêng
+python -m src.crawler.pipeline --step 1   # lấy danh sách 29 GV
+python -m src.crawler.pipeline --step 2   # crawl từng profile
+python -m src.crawler.pipeline --step 3   # extract skill + research topics
 
-# Bước 3: gộp với dữ liệu khảo sát
-python -m src.data_pipeline.merge_to_survey
-
-# Bước 4: crawl thêm dữ liệu GV từ Semantic Scholar
-python -m src.data_pipeline.crawl_advisor_data
-
-# Crawl cho một GV cụ thể
-python -m src.data_pipeline.crawl_advisor_data --advisor "Phạm Xuân Lâm"
+# Crawl một GV cụ thể
+python -m src.crawler.pipeline --step 2 --slug ts-pham-xuan-lam
+python -m src.crawler.pipeline --step 3 --slug ts-pham-xuan-lam
 ```
 
-### Kết quả đầu ra
-
-| File | Nội dung |
-|------|----------|
-| `data/processed/thesis_extracted.csv` | Mỗi dòng là 1 khóa luận, đầy đủ các trường công nghệ |
-| `data/processed/advisor_skills.csv` | Tổng hợp skill tech của từng GV (comma-separated, sort theo tần suất) |
-| `data/processed/advisor_profiles.csv` | Hồ sơ đầy đủ: số lượng SV, điểm TB, phân bổ lĩnh vực, skill_score, rating |
-| `data/processed/merged_dataset.csv` | Gộp PDF extraction + khảo sát Google Forms |
-| `data/processed/advisor_crawled.csv` | Dữ liệu thô từ Semantic Scholar (h-index, papers, citations) |
-| `logs/pipeline.log` | Log toàn bộ quá trình xử lý |
+**Incremental crawl:** Bổ sung GV vào `data/raw/lecturers_list.json` rồi chạy lại `--step 2` — chỉ crawl người chưa có file trong `data/raw/profiles/`.
 
 ---
 
 ## Luồng xử lý dữ liệu
 
 ```
-data/*.pdf / *.docx
+data/1.pdfs/*.pdf
     │
-    ├─ pdf_ocr.py
-    │   ├─ pypdf (native text extraction)
-    │   └─ pytesseract OCR fallback (nếu PDF scan, < 300 ký tự)
+    ├─ pdf_ocr.py          pypdf → OCR fallback nếu PDF scan
+    ├─ llm_extractor.py    9router (model rotation) → JSON 30 fields
+    ├─ clean_data.py     → thesis_extracted.csv
+    ├─ build_pdf_dataset → pdf_dataset.csv  (schema 98 cột)
+    └─ build_advisor_skills → advisor_skills.csv + advisor_profiles.csv
+
+fit.neu.edu.vn/lecturer
     │
-    ├─ gemini_extractor.py
-    │   └─ Gemini API → JSON có cấu trúc (30 fields)
-    │
-    ├─ clean_data.py
-    │   └─ thesis_extracted.csv  (1 dòng / khóa luận)
-    │
-    ├─ build_advisor_skills.py
-    │   ├─ advisor_skills.csv    (skill tech tổng hợp)
-    │   └─ advisor_profiles.csv  (hồ sơ đầy đủ + rating từ khảo sát)
-    │
-    ├─ merge_to_survey.py
-    │   └─ merged_dataset.csv    (PDF + Google Forms)
-    │
-    └─ crawl_advisor_data.py
-        ├─ Semantic Scholar API  (h-index, paper count, citations)
-        ├─ Google Scholar        (best-effort)
-        ├─ advisor_overrides.json (thủ công)
-        └─ advisor_profiles.csv  (updated với skill_score 0–100)
+    ├─ lecturer_list_crawler.py   → lecturers_list.json (29 GV)
+    ├─ lecturer_detail_crawler.py → profiles/<slug>.json (raw)
+    └─ skill_extractor.py
+           ├─ Taxonomy keyword matching
+           ├─ Evidence từ publications (time-decay weight)
+           └─ advisor_research_profiles.json
+              advisor_skills_extracted.csv
 ```
 
 ---
 
-## Điểm skill của Giảng viên (`skill_score`)
+## Advisor Research Profile
 
-Mỗi giảng viên được tính điểm tổng hợp 0–100 từ các nguồn:
+Mỗi giảng viên được xây **Research Profile** theo pipeline 3 bước, không gán skill tùy tiện:
 
-| Thành phần | Điểm tối đa | Nguồn |
-|---|---|---|
-| h-index | 30 | Semantic Scholar |
-| Số lượng bài báo | 30 | Semantic Scholar |
-| Số lượt trích dẫn | 20 | Semantic Scholar |
-| Đánh giá của sinh viên | 20 | khaosat_kltn.csv |
+**Bước 1 — Taxonomy matching** (rule-based, high precision)
+```
+Publication / Teaching / Research area text
+    → keyword match với taxonomy 30+ skills
+    → chỉ gán skill khi có bằng chứng rõ ràng
+```
 
-Điểm đánh giá của sinh viên lấy trung bình 6 tiêu chí: chuyên môn, định hướng đề tài, hỗ trợ tương tác, chất lượng phản hồi, quản lý tiến độ, phong cách hướng dẫn.
+**Bước 2 — Evidence scoring** (time-decay)
+```
+skill_strength = 0.4 × research_area_weight
+               + 0.3 × publication_weight × e^(-λ·Δyear)
+               + 0.1 × teaching_weight
+```
+Publication càng mới → weight càng cao. GV chuyển hướng nghiên cứu được phản ánh đúng.
 
-Để bổ sung thông tin thủ công cho một GV (homepage, research interests, Google Scholar URL), chỉnh sửa `configs/advisor_overrides.json`.
+**Bước 3 — Evidence linking**
+```json
+{
+  "skill": "Natural Language Processing",
+  "confidence": 0.82,
+  "strength": 0.67,
+  "evidence": [
+    {"source": "publication", "title": "Efficient Vietnamese Name Detection...", "year": 2025, "weight": 1.0},
+    {"source": "research_area", "area": "Các hệ thống thông minh", "weight": 0.8}
+  ]
+}
+```
 
 ---
 
-## Schema CSV
+## Các file đầu ra chính
 
-`thesis_extracted.csv` dùng cùng tên cột với `khaosat_kltn.csv`. Các trường không tìm thấy trong PDF để là `None` / `NaN` — **không bao giờ tự điền giả**.
-
-| Nhóm | Trường | Ví dụ |
-|------|--------|-------|
-| Sinh viên | `student_id`, `student_name`, `major`, `completion_year` | `11221234` |
-| Khóa luận | `thesis_title`, `field_category`, `advisor_name`, `thesis_grade` | `AI / Học sâu / GenAI` |
-| Web | `web_languages`, `frontend_frameworks`, `backend_frameworks`, `database_cache` | `React.js`, `FastAPI` |
-| App | `app_languages`, `app_frameworks`, `app_db_backend`, `mobile_client_tech` | `Flutter`, `SQLite` |
-| Hạ tầng | `architecture` | `Docker, Microservices` |
-| AI/ML | `ai_frameworks`, `ai_problems` | `PyTorch, YOLO`, `Object Detection` |
-| Data | `data_tools`, `data_models` | `Pandas, Power BI` |
-| Game | `game_engine`, `game_type` | `Unity (C#)`, `Game 2D Mobile` |
-| IoT/Security | `specialty_field`, `hardware`, `iot_protocol` | `Arduino`, `MQTT` |
-| Nghiên cứu | `research_methods`, `research_output` | `LaTeX, Journal Paper` |
-| Meta | `source_file`, `extraction_status`, `extraction_notes` | `success` / `failed` |
+| File | Mô tả |
+|------|--------|
+| `data/processed/thesis_extracted.csv` | ~200 khóa luận, 33 trường kỹ thuật |
+| `data/processed/pdf_dataset.csv` | Schema 98 cột giống khảo sát Google Forms |
+| `data/processed/advisor_research_profiles.json` | Full research profile với skill+evidence |
+| `data/processed/advisor_skills_extracted.csv` | Flat CSV cho RL pipeline |
+| `data/raw/profiles/<slug>.json` | Raw profile từng GV (teaching, pubs, research areas) |
 
 ---
 
@@ -222,13 +233,26 @@ Mỗi giảng viên được tính điểm tổng hợp 0–100 từ các nguồ
 
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
-| 1. Data Pipeline | PDF OCR + Gemini extraction + advisor skill profiles | 🔄 Đang thực hiện |
-| 2. NLP / Embedding | sentence-transformers, BGE, FAISS similarity | ⏳ Tiếp theo |
-| 3. Matching Environment | Gymnasium env, state/action/reward, action masking | ⏳ |
-| 4. RL Training | PPO (chính) + DQN (đối chứng), Stable-Baselines3 | ⏳ |
-| 5. Baselines | Random, Greedy, Gale-Shapley, SPA | ⏳ |
-| 6. Continuous Learning | Candidate V2, Evaluation Gate, Rollback | ⏳ |
-| 7. Web Application | FastAPI + React + PostgreSQL + Docker | ⏳ |
-| 8. Thực nghiệm & Viết | E1–E10, ablation, thesis | ⏳ |
+| **1a. PDF Pipeline** | LLM extraction + advisor skill aggregation | 🔄 Đang chạy (~200 PDFs) |
+| **1b. Crawler** | fit.neu.edu.vn → research profiles | ✅ Hoạt động (29 GV) |
+| **2. NLP / Embedding** | sentence-transformers, BGE, FAISS, compatibility matrix | ⏳ Tiếp theo |
+| **3. Matching Env** | Gymnasium env, state/action/reward, action masking | ⏳ |
+| **4. RL Training** | PPO (chính) + DQN (đối chứng), Stable-Baselines3 | ⏳ |
+| **5. Baselines** | Random, Greedy, Gale-Shapley, SPA | ⏳ |
+| **6. Continuous Learning** | Candidate V2, Evaluation Gate, Rollback | ⏳ |
+| **7. Web App** | FastAPI + React + PostgreSQL + Docker | ⏳ |
+| **8. Thực nghiệm** | E1–E10, ablation, Recall@K, MRR | ⏳ |
 
-**Deadline:** 20/11/2026
+**Deadline: 20/11/2026**
+
+---
+
+## Ghi chú học thuật
+
+**Về vai trò của RL:** Nếu thiếu grade/feedback thực tế, reward được xây từ compatibility + fairness. RL có giá trị hơn Greedy/Gale-Shapley ở điểm **Continuous Learning** — policy cải thiện theo cohort mới, không chỉ tối ưu một lần.
+
+**Metric đánh giá (không cần grade):**
+- Compatibility score (cosine similarity thesis ↔ advisor research)
+- Recall@K / MRR so với historical assignment
+- Load variance & quota violations
+- So sánh PPO vs DQN vs Greedy vs Gale-Shapley trên cùng dataset
