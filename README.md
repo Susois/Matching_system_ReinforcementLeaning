@@ -1,7 +1,7 @@
 # Hệ thống RL Phân bổ Sinh viên – Giảng viên Hướng dẫn
 
 > **Reinforcement Learning-Based Student–Advisor Matching System**
-> Khoa CNTT – Đại học Kinh tế Quốc dân | Deadline: 20/11/2026
+
 
 ---
 
@@ -156,94 +156,6 @@ python -m src.crawler.pipeline --step 3 --slug ts-pham-xuan-lam
 ```
 
 **Incremental crawl:** Bổ sung GV vào `data/raw/lecturers_list.json` rồi chạy lại `--step 2` — chỉ crawl người chưa có file trong `data/raw/profiles/`.
-
----
-
-## Luồng xử lý dữ liệu
-
-```
-data/1.pdfs/*.pdf
-    │
-    ├─ pdf_ocr.py          pypdf → OCR fallback nếu PDF scan
-    ├─ llm_extractor.py    9router (model rotation) → JSON 30 fields
-    ├─ clean_data.py     → thesis_extracted.csv
-    ├─ build_pdf_dataset → pdf_dataset.csv  (schema 98 cột)
-    └─ build_advisor_skills → advisor_skills.csv + advisor_profiles.csv
-
-fit.neu.edu.vn/lecturer
-    │
-    ├─ lecturer_list_crawler.py   → lecturers_list.json (29 GV)
-    ├─ lecturer_detail_crawler.py → profiles/<slug>.json (raw)
-    └─ skill_extractor.py
-           ├─ Taxonomy keyword matching
-           ├─ Evidence từ publications (time-decay weight)
-           └─ advisor_research_profiles.json
-              advisor_skills_extracted.csv
-```
-
----
-
-## Advisor Research Profile
-
-Mỗi giảng viên được xây **Research Profile** theo pipeline 3 bước, không gán skill tùy tiện:
-
-**Bước 1 — Taxonomy matching** (rule-based, high precision)
-```
-Publication / Teaching / Research area text
-    → keyword match với taxonomy 30+ skills
-    → chỉ gán skill khi có bằng chứng rõ ràng
-```
-
-**Bước 2 — Evidence scoring** (time-decay)
-```
-skill_strength = 0.4 × research_area_weight
-               + 0.3 × publication_weight × e^(-λ·Δyear)
-               + 0.1 × teaching_weight
-```
-Publication càng mới → weight càng cao. GV chuyển hướng nghiên cứu được phản ánh đúng.
-
-**Bước 3 — Evidence linking**
-```json
-{
-  "skill": "Natural Language Processing",
-  "confidence": 0.82,
-  "strength": 0.67,
-  "evidence": [
-    {"source": "publication", "title": "Efficient Vietnamese Name Detection...", "year": 2025, "weight": 1.0},
-    {"source": "research_area", "area": "Các hệ thống thông minh", "weight": 0.8}
-  ]
-}
-```
-
----
-
-## Các file đầu ra chính
-
-| File | Mô tả |
-|------|--------|
-| `data/processed/thesis_extracted.csv` | ~200 khóa luận, 33 trường kỹ thuật |
-| `data/processed/pdf_dataset.csv` | Schema 98 cột giống khảo sát Google Forms |
-| `data/processed/advisor_research_profiles.json` | Full research profile với skill+evidence |
-| `data/processed/advisor_skills_extracted.csv` | Flat CSV cho RL pipeline |
-| `data/raw/profiles/<slug>.json` | Raw profile từng GV (teaching, pubs, research areas) |
-
----
-
-## Lộ trình phát triển
-
-| Giai đoạn | Nội dung | Trạng thái |
-|---|---|---|
-| **1a. PDF Pipeline** | LLM extraction + advisor skill aggregation | 🔄 Đang chạy (~200 PDFs) |
-| **1b. Crawler** | fit.neu.edu.vn → research profiles | ✅ Hoạt động (29 GV) |
-| **2. NLP / Embedding** | sentence-transformers, BGE, FAISS, compatibility matrix | ⏳ Tiếp theo |
-| **3. Matching Env** | Gymnasium env, state/action/reward, action masking | ⏳ |
-| **4. RL Training** | PPO (chính) + DQN (đối chứng), Stable-Baselines3 | ⏳ |
-| **5. Baselines** | Random, Greedy, Gale-Shapley, SPA | ⏳ |
-| **6. Continuous Learning** | Candidate V2, Evaluation Gate, Rollback | ⏳ |
-| **7. Web App** | FastAPI + React + PostgreSQL + Docker | ⏳ |
-| **8. Thực nghiệm** | E1–E10, ablation, Recall@K, MRR | ⏳ |
-
-**Deadline: 20/11/2026**
 
 ---
 
