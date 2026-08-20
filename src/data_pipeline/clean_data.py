@@ -36,7 +36,7 @@ from configs.settings import (
     GEMINI_RETRY_DELAY,
 )
 from src.data_pipeline.pdf_ocr import extract_text, get_source_files
-from src.data_pipeline.gemini_extractor import GeminiExtractor
+from src.data_pipeline.llm_extractor import LLMExtractor as GeminiExtractor
 
 # ── Logging ───────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -138,20 +138,24 @@ def run_pipeline(limit: int = 0, force: bool = False) -> pd.DataFrame:
         logger.error(str(e))
         sys.exit(1)
 
-    # Sequential processing — avoids 429 rate limits on free tier
+    # Sequential processing — model rotation handles rate limits automatically
     records: list[dict] = []
-    for file_path in tqdm(todo, desc="Extracting"):
+    for i, file_path in enumerate(tqdm(todo, desc="Extracting")):
         try:
             record = _process_one(file_path, extractor)
         except Exception as e:
             logger.error(f"Unexpected error for {file_path.name}: {e}")
-            record = GeminiExtractor._failed_record(file_path.name, str(e))
+            record = extractor._failed(file_path.name, str(e))
         records.append(record)
 
         # Save after every file so progress is not lost on crash/interrupt
         _save([record], THESIS_CSV, append=True)
 
-        # Polite delay between requests (free tier: 10 req/min)
+        # Log model status mỗi 10 file
+        if (i + 1) % 10 == 0:
+            logger.info(f"[{i+1}/{len(todo)}] {extractor.model_status()}")
+
+        # Polite delay giữa các request
         time.sleep(GEMINI_RETRY_DELAY)
 
     ok  = sum(1 for r in records if r.get("extraction_status") == "success")

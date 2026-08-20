@@ -30,11 +30,37 @@ ADVISOR_SKILLS_CSV   = PROCESSED_DIR / "advisor_skills.csv"
 ADVISOR_PROFILE_CSV  = PROCESSED_DIR / "advisor_profiles.csv"
 SURVEY_CSV           = CLEAN_DATA_DIR / "khaosat_kltn.csv"
 
-# ── Gemini API ────────────────────────────────────────────────
+# ── LLM Provider ─────────────────────────────────────────────
+# "gemini" | "openai_compat"  (9router, OpenRouter, etc.)
+LLM_PROVIDER         = os.getenv("LLM_PROVIDER", "openai_compat")
+
+# ── 9router / OpenAI-compatible ───────────────────────────────
+NINEROUTER_BASE_URL  = os.getenv("NINEROUTER_BASE_URL", "http://localhost:20128/v1")
+NINEROUTER_API_KEY   = os.getenv("NINEROUTER_API_KEY", "")
+NINEROUTER_MODEL     = os.getenv("NINEROUTER_MODEL", "kr/claude-haiku-4.5")
+
+# Model rotation — thử lần lượt khi model trước bị limit/lỗi
+# Có thể override bằng NINEROUTER_MODEL_LIST="model1,model2,model3" trong .env
+_default_model_list = ",".join([
+    "kr/claude-haiku-4.5",
+    "ag/gemini-3-flash",
+    "kr/deepseek-3.2-thinking",
+    "kr/minimax-m2.5",
+    "kr/glm-5-thinking",
+    "ag/gemini-3.5-flash-low",
+    "kr/claude-sonnet-4",
+])
+NINEROUTER_MODEL_LIST = [
+    m.strip()
+    for m in os.getenv("NINEROUTER_MODEL_LIST", _default_model_list).split(",")
+    if m.strip()
+]
+
+# ── Gemini (fallback) ─────────────────────────────────────────
 GOOGLE_API_KEY       = os.getenv("GOOGLE_API_KEY", "")
-GEMINI_MODEL         = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL         = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_MAX_RETRIES   = 3
-GEMINI_RETRY_DELAY   = 2          # seconds between retries
+GEMINI_RETRY_DELAY   = 7          # 7s delay → ~8.5 req/min, dưới ngưỡng 10 req/min free tier
 GEMINI_TEMPERATURE   = 0.1
 GEMINI_MAX_TOKENS    = 4096
 PDF_TEXT_LIMIT       = 12000      # chars sent to Gemini per PDF

@@ -13,8 +13,13 @@ Outputs pure text strings — no Gemini calls here.
 
 import logging
 import re
+import warnings
 from pathlib import Path
 from typing import Optional
+
+# Suppress pypdf "Multiple definitions in dictionary" noise
+warnings.filterwarnings("ignore", message="Multiple definitions in dictionary")
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
